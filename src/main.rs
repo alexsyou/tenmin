@@ -22,10 +22,7 @@ impl EventHandler for Handler {
             x if x.starts_with("!time") => {
                 let time_vec: Vec<&str> = x.split(' ').collect();
                 if let Ok(dur) = time_vec[1].trim().parse::<u32>() {
-                    match msg.channel_id.say(&ctx.http, dur.to_string()).await {
-                        Err(why) => println!("Error setting up timer: {why:?}"),
-                        Ok(timer_msg) => timeset(ctx, timer_msg, dur).await,
-                    };
+                    timeset(ctx, &msg, dur).await;
                 }
             }
             _ => {}
@@ -33,14 +30,18 @@ impl EventHandler for Handler {
     }
 }
 
-async fn timeset(ctx: Context, msg: Message, dur: u32) {
+async fn timeset(ctx: Context, msg: &Message, dur: u32) {
     let mut intv = interval(Duration::from_millis(60000));
 
     match msg
         .channel_id
         .say(
             &ctx.http,
-            format!("Setting timer for {} minutes :robot:", dur),
+            format!(
+                "SETTING TIMER FOR {} MINUTE{} :robot:",
+                dur,
+                if dur == 1 { "" } else { "S" }
+            ),
         )
         .await
     {
@@ -65,10 +66,8 @@ async fn timeset(ctx: Context, msg: Message, dur: u32) {
                 let edit = match i {
                     x if x == dur => EditMessage::new()
                         .content(":alarm_clock: TIMER COMPLETE. :alarm_clock: :boom::robot:"),
-                    _ => EditMessage::new().content(format!(
-                        "{}:00 MINUTES REMIAINING... :bomb::robot:",
-                        dur - i
-                    )),
+                    _ => EditMessage::new()
+                        .content(format!("{}:00 MINUTES REMAINING... :bomb::robot:", dur - i)),
                 };
                 match ctdwn
                     .channel_id
