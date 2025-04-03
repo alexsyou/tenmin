@@ -4,5 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.66"
 serenity = "0.12"
-tokio = { version = "1.12.2", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.26.0", features = ["macros", "rt-multi-thread"] }
+shuttle-runtime = "0.53.0"
+shuttle-serenity = "0.53.0"
+tracing = "0.1.37"

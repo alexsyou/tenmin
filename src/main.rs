@@ -1,11 +1,18 @@
 use std::env;
 use std::time::Duration;
 
+use anyhow::Context as _;
+
 use serenity::async_trait;
 use serenity::builder::EditMessage;
 use serenity::model::channel::Embed;
 use serenity::model::channel::Message;
+use serenity::model::gateway::Ready;
 use serenity::prelude::*;
+
+use shuttle_runtime::SecretStore;
+
+use tracing::{error, info};
 
 use tokio::time::interval;
 
@@ -16,17 +23,50 @@ impl EventHandler for Handler {
     async fn message(&self, ctx: Context, msg: Message) {
         match msg.content.as_str() {
             "!ping" => match msg.channel_id.say(&ctx.http, "Pong!").await {
-                Err(why) => println!("Error sending message: {why:?}"),
-                Ok(_) => println!("Sent message!"),
+                Err(why) => error!("Error sending message: {why:?}"),
+                Ok(_) => info!("Sent message!"),
             },
             x if x.starts_with("!time") => {
                 let time_vec: Vec<&str> = x.split(' ').collect();
-                if let Ok(dur) = time_vec[1].trim().parse::<u32>() {
-                    timeset(ctx, &msg, dur).await;
+                match time_vec.len() {
+                    1 => botsay(ctx, &msg, "NO TIME DETECTED :robot::anger:").await,
+                    2 => {
+                        if let Ok(dur) = time_vec[1].trim().parse::<u32>() {
+                            timeset(ctx, &msg, dur).await;
+                        } else {
+                            botsay(ctx, &msg, "TIME IN INCORRECT FORMAT :robot::anger:").await
+                        }
+                    }
+                    3 => {
+                        if let (Ok(dur), title) = (time_vec[1].trim().parse::<u32>(), time_vec[2]) {
+                            timeset(ctx, &msg, dur).await;
+                        } else {
+                            botsay(ctx, &msg, "TIME IN INCORRECT FORMAT :robot::anger:").await
+                        }
+                    }
+                    _ => {
+                        botsay(
+                            ctx,
+                            &msg,
+                            "I DO NOT RECOGNIZE THIS PATTERN :robot::confused:",
+                        )
+                        .await
+                    }
                 }
             }
             _ => {}
         }
+    }
+
+    async fn ready(&self, _: Context, ready: Ready) {
+        info!("{} is connected!", ready.user.name);
+    }
+}
+
+async fn botsay(ctx: Context, msg: &Message, diag: &str) {
+    match msg.channel_id.say(&ctx.http, diag).await {
+        Err(why) => error!("Error sending message: {why:?}"),
+        Ok(res) => info!("Message sent successfully: {}", res.content),
     }
 }
 
@@ -45,8 +85,8 @@ async fn timeset(ctx: Context, msg: &Message, dur: u32) {
         )
         .await
     {
-        Err(why) => println!("Error sending initial timer message: {why:?}"),
-        Ok(_) => println!("Sent initial timer message"),
+        Err(why) => error!("Error sending initial timer message: {why:?}"),
+        Ok(_) => info!("Sent initial timer message"),
     }
 
     match msg
@@ -57,37 +97,54 @@ async fn timeset(ctx: Context, msg: &Message, dur: u32) {
         )
         .await
     {
-        Err(why) => println!("Error sending countdown message: {why:?}"),
+        Err(why) => error!("Error sending countdown message: {why:?}"),
         Ok(ctdwn) => {
-            println!("Sent countdown message");
+            info!("Sent countdown message");
             intv.tick().await;
             for i in 1..=dur {
                 intv.tick().await;
                 let edit = match i {
                     x if x == dur => EditMessage::new()
-                        .content(":alarm_clock: TIMER COMPLETE. :alarm_clock: :boom::robot:"),
-                    _ => EditMessage::new()
-                        .content(format!("{}:00 MINUTES REMAINING... :bomb::robot:", dur - i)),
+                        .content(":alarm_clock: TIMER COMPLETE :alarm_clock: :boom::robot:"),
+                    _ => EditMessage::new().content(format!(
+                        "{}:00 MINUTES REMAINING ... :bomb::robot:",
+                        dur - i
+                    )),
                 };
                 match ctdwn
                     .channel_id
                     .edit_message(&ctx.http, &ctdwn.id, edit)
                     .await
                 {
-                    Err(why) => println!("Error editing message: {why:?}"),
+                    Err(why) => error!("Error editing message: {why:?}"),
                     Ok(edit_msg) => {
                         let cont = edit_msg.content;
-                        println!("Edited message to: {cont:?}");
+                        info!("Edited message to: {cont:?}");
                     }
                 }
+            }
+
+            if let Err(why) = msg
+                .reply_ping(
+                    &ctx.http,
+                    "YOUR TIME HAS COME TO AN END :index_pointing_at_the_viewer::robot:",
+                )
+                .await
+            {
+                error!("Error replying to timer: {why:?}");
             }
         }
     }
 }
 
-#[tokio::main]
-async fn main() {
-    let token = env::var("DISCORD_TOKEN").expect("Expected token from environment");
+// #[tokio::main]
+#[shuttle_runtime::main]
+async fn main(
+    #[shuttle_runtime::Secrets] secrets: SecretStore,
+) -> shuttle_serenity::ShuttleSerenity {
+    let token = secrets
+        .get("DISCORD_TOKEN")
+        .context("'DISCORD_TOKEN' was not found")?;
 
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES
@@ -98,7 +155,9 @@ async fn main() {
         .await
         .expect("Err creating client");
 
-    if let Err(why) = client.start().await {
-        println!("Client error: {why:?}");
-    }
+    Ok(client.into())
+
+    // if let Err(why) = client.start().await {
+    //     println!("Client error: {why:?}");
+    // }
 }
