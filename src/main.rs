@@ -54,6 +54,14 @@ impl EventHandler for Handler {
                     }
                 }
             }
+            "!kys" => {
+                botsay(
+                    ctx,
+                    &msg,
+                    "KEEP YOURSELF SAFE TONIGHT. :gun::robot::slight_smile:",
+                )
+                .await
+            }
             _ => {}
         }
     }
