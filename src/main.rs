@@ -16,6 +16,8 @@ use tracing::{error, info};
 
 use tokio::time::interval;
 
+use rand::prelude::*;
+
 struct Handler;
 
 #[async_trait]
@@ -55,12 +57,20 @@ impl EventHandler for Handler {
                 }
             }
             "!kys" => {
-                botsay(
-                    ctx,
-                    &msg,
-                    "KEEP YOURSELF SAFE TONIGHT. :gun::robot::slight_smile:",
-                )
-                .await
+                botsay(ctx, &msg, "KILL YOURSELF NOW! :robot::joy:").await;
+                //
+                // let random = rand::random::<u8>();
+                // match random {
+                //     0..128 => botsay(ctx, &msg, "KILL YOURSELF NOW! :robot::joy:").await,
+                //     _ => {
+                //         botsay(
+                //             ctx,
+                //             &msg,
+                //             "KEEP YOURSELF SAFE TONIGHT. :gun::robot::slight_smile:",
+                //         )
+                //         .await
+                //     }
+                // }
             }
             _ => {}
         }

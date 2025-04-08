@@ -2113,6 +2113,7 @@ name = "tenmin"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "rand 0.9.0",
  "serenity",
  "shuttle-runtime",
  "shuttle-serenity",
