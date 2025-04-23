@@ -4,10 +4,13 @@ use std::time::Duration;
 use anyhow::Context as _;
 
 use serenity::async_trait;
+use serenity::builder::CreateCommand;
 use serenity::builder::EditMessage;
+use serenity::model::application::Command;
 use serenity::model::channel::Embed;
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
+use serenity::model::id::ApplicationId;
 use serenity::prelude::*;
 
 use shuttle_runtime::SecretStore;
@@ -23,13 +26,13 @@ struct Handler;
 #[async_trait]
 impl EventHandler for Handler {
     async fn message(&self, ctx: Context, msg: Message) {
-        match msg.content.as_str() {
+        match msg.content.split_ascii_whitespace().collect::<Vec<&str>>()[0] {
             "!ping" => match msg.channel_id.say(&ctx.http, "Pong!").await {
                 Err(why) => error!("Error sending message: {why:?}"),
                 Ok(_) => info!("Sent message!"),
             },
-            x if x.starts_with("!time") => {
-                let time_vec: Vec<&str> = x.split(' ').collect();
+            "!time" => {
+                let time_vec: Vec<&str> = msg.content.split_ascii_whitespace().collect();
                 match time_vec.len() {
                     1 => botsay(ctx, &msg, "NO TIME DETECTED :robot::anger:").await,
                     2 => {
@@ -71,6 +74,39 @@ impl EventHandler for Handler {
                 //         .await
                 //     }
                 // }
+            }
+            "!eileen" => {
+                botsay(ctx, &msg, "HELLO EILEEN :goat::saluting_face::robot:").await;
+            }
+            "!roll" => {
+                let roll_vec: Vec<&str> = msg.content.split_ascii_whitespace().collect();
+                match roll_vec.len() {
+                    1 => botsay(ctx, &msg, "NO TIME DETECTED :robot::anger:").await,
+                    2 => {
+                        if let Ok(die) = roll_vec[1].trim().parse::<u32>() {
+                            let rnd = {
+                                let mut rng = rand::rng();
+                                rng.random_range(0..die)
+                            };
+                            botsay(
+                                ctx,
+                                &msg,
+                                format!("YOU ROLLED A **{}** :robot::game_die:", rnd).as_str(),
+                            )
+                            .await
+                        } else {
+                            botsay(ctx, &msg, "ROLL COUNT IN INCORRECT FORMAT :robot::anger:").await
+                        }
+                    }
+                    _ => {
+                        botsay(
+                            ctx,
+                            &msg,
+                            "I DO NOT RECOGNIZE THIS PATTERN :robot::confused:",
+                        )
+                        .await
+                    }
+                }
             }
             _ => {}
         }
@@ -155,7 +191,6 @@ async fn timeset(ctx: Context, msg: &Message, dur: u32) {
     }
 }
 
-// #[tokio::main]
 #[shuttle_runtime::main]
 async fn main(
     #[shuttle_runtime::Secrets] secrets: SecretStore,
@@ -172,6 +207,9 @@ async fn main(
         .event_handler(Handler)
         .await
         .expect("Err creating client");
+
+    let builder = CreateCommand::new("ping").description("A simple ping!");
+    let _ = Command::create_global_command(&client.http, builder).await;
 
     Ok(client.into())
 
