@@ -4,13 +4,9 @@ use std::time::Duration;
 use anyhow::Context as _;
 
 use serenity::async_trait;
-use serenity::builder::CreateCommand;
 use serenity::builder::EditMessage;
-use serenity::model::application::Command;
-use serenity::model::channel::Embed;
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
-use serenity::model::id::ApplicationId;
 use serenity::prelude::*;
 
 use shuttle_runtime::SecretStore;
@@ -21,7 +17,50 @@ use tokio::time::interval;
 
 use rand::prelude::*;
 
-struct Handler;
+use reqwest::*;
+
+use serde::Deserialize;
+
+use serde_json::Value;
+
+struct Handler {
+    riot_client: reqwest::Client,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all(serialize = "snake_case"))]
+#[serde(rename_all(deserialize = "camelCase"))]
+struct AccountInfo {
+    puuid: String,
+    //INFO: Forced camelCase by RIOT API.. is this fixable?
+    game_name: String,
+    tag_line: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all(serialize = "snake_case"))]
+#[serde(rename_all(deserialize = "camelCase"))]
+struct RankInfo {
+    fresh_blood: bool,
+    hot_streak: bool,
+    inactive: bool,
+    league_id: String,
+    league_points: u16,
+    losses: u16,
+    puuid: String,
+    queue_type: String,
+    rank: String,
+    summoner_id: String,
+    tier: String,
+    veteran: bool,
+    wins: u16,
+}
+
+#[derive(Deserialize)]
+struct LeagueAccountStatus {
+    solo: RankInfo,
+    flex: RankInfo,
+}
 
 #[async_trait]
 impl EventHandler for Handler {
@@ -103,6 +142,138 @@ impl EventHandler for Handler {
                             ctx,
                             &msg,
                             "I DO NOT RECOGNIZE THIS PATTERN :robot::confused:",
+                        )
+                        .await
+                    }
+                }
+            }
+            "!lol" => {
+                let lol_vec: Vec<&str> = msg.content.split_ascii_whitespace().collect();
+                match lol_vec.as_slice() {
+                    [_lol] => {
+                        botsay(
+                            ctx,
+                            &msg,
+                            "NO COMMAND DETECTED ... USE **acc** OR **mh** :robot::anger:",
+                        )
+                        .await
+                    }
+                    [_lol, cmd] => match *cmd {
+                        "acc" | "mh" => {
+                            botsay(
+                                ctx,
+                                &msg,
+                                format!(
+                                "NO ACCOUNT DETECTED FOR COMMAND: **{}** ... NEEDS USERNAME#TAG",
+                                cmd
+                            )
+                                .as_str(),
+                            )
+                            .await
+                        }
+                        _ => {
+                            botsay(
+                                ctx,
+                                &msg,
+                                "I DO NOT RECOGNIZE THIS COMMAND :robot::confused:",
+                            )
+                            .await
+                        }
+                    },
+                    [_lol, cmd, usr] => {
+                        let usr_vec: Vec<&str> = usr.split("#").collect();
+                        if let [game_name, tag_line] = usr_vec.as_slice() {
+                            match *cmd {
+                                "acc" => {
+                                    let account_http = format!("https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{}/{}", game_name, tag_line);
+                                    match self.riot_client.get(account_http.as_str()).send().await {
+                                        Err(why) => {
+                                            error!(
+                                                "Error sending get request to {}: {why:?}",
+                                                account_http
+                                            )
+                                        }
+                                        Ok(acc_res) => match acc_res.json::<AccountInfo>().await {
+                                            Err(why) => {
+                                                error!("Error converting response to text: {why:?}")
+                                            }
+                                            Ok(acc_info) => {
+                                                let acc_puuid = acc_info.puuid;
+                                                let account_lol_http = format!("https://na1.api.riotgames.com/lol/league/v4/entries/by-puuid/{}", acc_puuid);
+                                                match self
+                                                    .riot_client
+                                                    .get(account_lol_http.as_str())
+                                                    .send()
+                                                    .await
+                                                {
+                                                    Err(why) => {
+                                                        error!(
+                                                        "Error sending get request to {}: {why:?}",
+                                                        account_lol_http
+                                                        )
+                                                    }
+                                                    Ok(acc_lol_res) => match acc_lol_res.json::<LeagueAccountStatus>().await {
+                                                        Err(why) => error!("Error converting response to text: {why:?}"),
+                                                        Ok(acc_lol_info) => {
+                                                            let solo = acc_lol_info.solo;
+                                                            let flex = acc_lol_info.flex;
+
+                                                            let solo_tier = solo.tier;
+                                                            let solo_div = solo.rank;
+                                                            let solo_lp = solo.league_points;
+                                                            let solo_w = solo.wins;
+                                                            let solo_l = solo.losses;
+
+                                                            let flex_tier = flex.tier;
+                                                            let flex_div = flex.rank;
+                                                            let flex_lp = flex.league_points;
+                                                            let flex_w = flex.wins;
+                                                            let flex_l = flex.losses;
+                                                            // let solo = &acc_lol_info[0];
+                                                            // let flex = &acc_lol_info[1];
+                                                            //
+                                                            // let solo_tier = &solo["tier"];
+                                                            // let solo_div = &solo["rank"];
+                                                            // let solo_lp = &solo["leaguePoints"];
+                                                            // let solo_w = &solo["wins"];
+                                                            // let solo_l = &solo["losses"];
+                                                            //
+                                                            // let flex_tier = &flex["tier"];
+                                                            // let flex_div = &flex["rank"];
+                                                            // let flex_lp = &flex["leaguePoints"];
+                                                            // let flex_w = &flex["wins"];
+                                                            // let flex_l = &flex["losses"];
+
+
+
+
+                                                            botsay(ctx, &msg, format!("**{usr}** IS RANKED\r\n**{solo_tier} {solo_div} {solo_lp}LP** IN RANKED SOLO/DUO WITH **{solo_w}** WINS AND **{solo_l}** LOSSES\r\n **{flex_tier} {flex_div} {flex_lp}LP** IN RANKED FLEX WITH **{flex_w}** WINS AND **{flex_l}** LOSSES\r\n :robot::nerd:").as_str()).await;
+                                                        }
+
+                                                    }
+                                                }
+                                            }
+                                        },
+                                    }
+                                }
+                                _ => {
+                                    botsay(
+                                        ctx,
+                                        &msg,
+                                        "I DO NOT RECOGNIZE THIS COMMAND :robot::confused:",
+                                    )
+                                    .await
+                                }
+                            }
+                        } else {
+                            botsay(ctx, &msg, "USERNAME IN INCORRECT FORMAT :robot::anger:").await
+                        }
+                    }
+                    _ => {
+                        botsay(
+                            ctx,
+                            &msg,
+                            "I DO NOT RECOGNIZE THIS COMMAND :robot::confused:",
                         )
                         .await
                     }
@@ -195,21 +366,39 @@ async fn timeset(ctx: Context, msg: &Message, dur: u32) {
 async fn main(
     #[shuttle_runtime::Secrets] secrets: SecretStore,
 ) -> shuttle_serenity::ShuttleSerenity {
-    let token = secrets
+    let disc_token = secrets
         .get("DISCORD_TOKEN")
         .context("'DISCORD_TOKEN' was not found")?;
+
+    let riot_token = secrets
+        .get("RIOT_TOKEN")
+        .context("'RIOT_TOKEN' was not found")?;
 
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES
         | GatewayIntents::MESSAGE_CONTENT;
 
-    let mut client = Client::builder(&token, intents)
-        .event_handler(Handler)
+    let mut headers = reqwest::header::HeaderMap::new();
+    let mut riot_header =
+        reqwest::header::HeaderValue::from_str(&riot_token).expect("Err reading RIOT_TOKEN header");
+    riot_header.set_sensitive(true);
+    headers.insert("X-Riot-Token", riot_header);
+
+    let riot_client = reqwest::Client::builder()
+        .default_headers(headers)
+        .build()
+        .expect("Err creating reqwest client");
+
+    let handle = Handler { riot_client };
+
+    let client = serenity::Client::builder(&disc_token, intents)
+        .event_handler(handle)
         .await
         .expect("Err creating client");
 
-    let builder = CreateCommand::new("ping").description("A simple ping!");
-    let _ = Command::create_global_command(&client.http, builder).await;
+    // TODO: IMPLMEMENT COMMAND AND SLASH COMMANDS
+    // let builder = CreateCommand::new("ping").description("A simple ping!");
+    // let _ = Command::create_global_command(&client.http, builder).await;
 
     Ok(client.into())
 
