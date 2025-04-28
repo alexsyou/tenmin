@@ -57,6 +57,8 @@ struct RankInfo {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all(serialize = "snake_case"))]
+#[serde(rename_all(deserialize = "camelCase"))]
 struct LeagueAccountStatus {
     solo: RankInfo,
     flex: RankInfo,
@@ -180,7 +182,8 @@ impl EventHandler for Handler {
                             .await
                         }
                     },
-                    [_lol, cmd, usr] => {
+                    [lol, cmd, ..] => {
+                        let usr = msg.content.clone().split_off(lol.len() + cmd.len() + 2);
                         let usr_vec: Vec<&str> = usr.split("#").collect();
                         if let [game_name, tag_line] = usr_vec.as_slice() {
                             match *cmd {
@@ -229,25 +232,11 @@ impl EventHandler for Handler {
                                                             let flex_lp = flex.league_points;
                                                             let flex_w = flex.wins;
                                                             let flex_l = flex.losses;
-                                                            // let solo = &acc_lol_info[0];
-                                                            // let flex = &acc_lol_info[1];
-                                                            //
-                                                            // let solo_tier = &solo["tier"];
-                                                            // let solo_div = &solo["rank"];
-                                                            // let solo_lp = &solo["leaguePoints"];
-                                                            // let solo_w = &solo["wins"];
-                                                            // let solo_l = &solo["losses"];
-                                                            //
-                                                            // let flex_tier = &flex["tier"];
-                                                            // let flex_div = &flex["rank"];
-                                                            // let flex_lp = &flex["leaguePoints"];
-                                                            // let flex_w = &flex["wins"];
-                                                            // let flex_l = &flex["losses"];
 
 
 
 
-                                                            botsay(ctx, &msg, format!("**{usr}** IS RANKED\r\n**{solo_tier} {solo_div} {solo_lp}LP** IN RANKED SOLO/DUO WITH **{solo_w}** WINS AND **{solo_l}** LOSSES\r\n **{flex_tier} {flex_div} {flex_lp}LP** IN RANKED FLEX WITH **{flex_w}** WINS AND **{flex_l}** LOSSES\r\n :robot::nerd:").as_str()).await;
+                                                            botsay(ctx, &msg, format!("**{usr}** IS RANKED\r\n**{solo_tier} {solo_div} {solo_lp}LP** IN RANKED SOLO/DUO WITH **{solo_w}** WINS AND **{solo_l}** LOSSES\r\n**{flex_tier} {flex_div} {flex_lp}LP** IN RANKED FLEX WITH **{flex_w}** WINS AND **{flex_l}** LOSSES\r\n :robot::nerd:").as_str()).await;
                                                         }
 
                                                     }
