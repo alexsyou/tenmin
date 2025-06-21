@@ -426,7 +426,7 @@ async fn main(
         .setup(|ctx, _, framework| {
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                let mut data = Data {
+                let data = Data {
                     riot_client,
                     yt_client,
                     timers: Arc::new(RwLock::new(Vec::new())),
