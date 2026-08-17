@@ -35,6 +35,9 @@ pub async fn time(
             let mut time_rem = duration;
 
             loop {
+                if time_rem == 0 {
+                    break;
+                }
                 interval.tick().await;
                 let new_time = time_rem;
                 time_channel_id

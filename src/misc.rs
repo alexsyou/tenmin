@@ -62,7 +62,7 @@ async fn sing(ctx: Context<'_>) -> Result<(), Error> {
 #[poise::command(slash_command, prefix_command)]
 pub async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     ctx.say(format!(
-        "PONG! :ping_pong:\nI LAG AT {:?} MS ... :stopwatch::robot:",
+        "PONG! :ping_pong:\n{:?} MS TO HIT  ... :stopwatch::robot:",
         ctx.ping().await.as_millis()
     ))
     .await?;

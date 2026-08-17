@@ -1,0 +1,5 @@
+.git
+.shuttle
+target
+Secrets.toml
+Secrets*.toml

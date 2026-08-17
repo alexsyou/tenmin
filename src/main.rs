@@ -14,8 +14,6 @@ use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
 use serenity::prelude::*;
 
-use shuttle_runtime::SecretStore;
-
 use tracing::{error, info};
 
 use tokio::task;
@@ -381,17 +379,15 @@ async fn error_handler(error: poise::FrameworkError<'_, Data, Error>) {
     poise::builtins::on_error(error).await.unwrap();
 }
 
-#[shuttle_runtime::main]
-async fn main(
-    #[shuttle_runtime::Secrets] secrets: SecretStore,
-) -> shuttle_serenity::ShuttleSerenity {
-    let disc_token = secrets
-        .get("DISCORD_TOKEN")
-        .context("'DISCORD_TOKEN' was not found")?;
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt::init();
 
-    let riot_token = secrets
-        .get("RIOT_TOKEN")
-        .context("'RIOT_TOKEN' was not found")?;
+    let disc_token =
+        env::var("DISCORD_TOKEN").context("'DISCORD_TOKEN' environment variable was not found")?;
+
+    let riot_token =
+        env::var("RIOT_TOKEN").context("'RIOT_TOKEN' environment variable was not found")?;
 
     let mut headers = reqwest::header::HeaderMap::new();
     let mut riot_header =
@@ -440,7 +436,7 @@ async fn main(
 
     //let handle = Handler { riot_client };
 
-    let client = serenity::client::ClientBuilder::new(&disc_token, intents)
+    let mut client = serenity::client::ClientBuilder::new(&disc_token, intents)
         // .event_handler(handle)
         .framework(framework)
         //        .type_map_insert::<RiotKey>(riot_client)
@@ -448,5 +444,7 @@ async fn main(
         .await
         .expect("Err creating client");
 
-    Ok(client.into())
+    client.start().await.context("Discord client stopped")?;
+
+    Ok(())
 }
