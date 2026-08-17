@@ -376,7 +376,20 @@ async fn timeset(ctx: serenity::client::Context, msg: &Message, dur: u32) {
 
 //TODO: Update error handler
 async fn error_handler(error: poise::FrameworkError<'_, Data, Error>) {
-    poise::builtins::on_error(error).await.unwrap();
+    match error {
+        poise::FrameworkError::Command { error, ctx, .. } => {
+            tracing::error!(
+                command = %ctx.command().qualified_name,
+                error = ?error,
+                "Command failed"
+            );
+        }
+        error => {
+            if let Err(error) = poise::builtins::on_error(error).await {
+                tracing::error!(error = ?error, "Error handler failed");
+            }
+        }
+    }
 }
 
 #[tokio::main]
